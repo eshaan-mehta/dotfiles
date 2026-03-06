@@ -1,0 +1,49 @@
+[user]
+	email = eshaanmehta414@bitgo.com
+    name = Eshaan Mehta
+    signingKey = E6D8A528277AE56D5438F85890A5D3BCD72914D2
+[commit]
+    gpgSign = true
+[gpg]
+	program = /Users/eshaanmehta/.local/bin/gpg-yubikey-alert
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+[fetch]
+	prune = true
+
+[alias]
+	a = add .
+	s = status
+	c = commit -m
+	ca = commit --amend
+	cae = commit --amend --no-edit
+	cm = "!f() { \
+    		git commit -m \"$1\" -m \"\" -m \"$2\"; \
+	}; f"
+
+	f = fetch
+	r = rebase
+	p = push
+	pp = pull
+	ch = checkout
+	pfwl = push --force-with-lease
+	pf = push --force
+	pu = !git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)
+	b = checkout -b
+	bl = branch
+
+	sync = "!f() { \
+    		git fetch --prune && \
+    		git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -d 2>/dev/null; true; \
+	}; f"
+
+	sw = "!f() { \
+        	if git show-ref --verify --quiet refs/heads/\"$1\"; then \
+            		git checkout \"$1\"; \
+        	else \
+            		git fetch && git checkout \"$1\"; \
+        	fi && git pull; \
+    	}; f"
