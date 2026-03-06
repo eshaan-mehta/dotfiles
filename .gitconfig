@@ -1,11 +1,3 @@
-[user]
-	email = eshaanmehta414@bitgo.com
-    name = Eshaan Mehta
-    signingKey = E6D8A528277AE56D5438F85890A5D3BCD72914D2
-[commit]
-    gpgSign = true
-[gpg]
-	program = /Users/eshaanmehta/.local/bin/gpg-yubikey-alert
 [filter "lfs"]
 	process = git-lfs filter-process
 	required = true
