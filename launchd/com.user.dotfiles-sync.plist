@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd config for dotfiles auto-sync.
+  install.sh substitutes __HOME__ with the actual $HOME and copies this
+  to ~/Library/LaunchAgents/.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.dotfiles-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/dotfiles/bin/auto-sync.sh</string>
+    </array>
+
+    <!-- Run every 10 minutes as a safety net. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <!-- Also run when files in the dotfiles dir change.
+         Note: WatchPaths only watches the top level, not subdirectories. -->
+    <key>WatchPaths</key>
+    <array>
+        <string>__HOME__/dotfiles</string>
+    </array>
+
+    <!-- Don't fire more than once per minute even if many changes happen. -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <!-- Don't run immediately on load (avoids surprise commits). -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/dotfiles/.auto-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/dotfiles/.auto-sync.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

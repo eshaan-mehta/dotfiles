@@ -44,3 +44,6 @@
             		git fetch && git checkout \"$1\"; \
         	fi && git pull; \
     	}; f"
+[user]
+	email = eshaaanm.mehta@gmail.com
+	name = Eshaan Mehta
