@@ -6,11 +6,16 @@
 [fetch]
 	prune = true
 
+[diff]
+    tool = kitty
+[difftool "kitty"]
+    cmd = kitten diff $LOCAL $REMOTE
+
 [alias]
 	a = add .
 	s = status
 	c = commit -m
-	ca = commit --amend
+	ca = commit --amend 
 	cae = commit --amend --no-edit
 	cm = "!f() { \
     		git commit -m \"$1\" -m \"\" -m \"$2\"; \

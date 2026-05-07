@@ -14,7 +14,7 @@ gpg --card-status > /dev/null 2>&1
 
 source "$envfile"
 export GH_TOKEN="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"
-export GITHUB_TOKEN="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"
+export GITHUB_TOKEN="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"
 export NIX_CONFIG="access-tokens = github.com=$GITHUB_TOKEN"
 
 eval "$(direnv hook zsh)"

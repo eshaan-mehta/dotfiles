@@ -46,22 +46,15 @@ eval "$(direnv hook zsh)"
 
 export PATH="${HOMEBREW_PREFIX}/opt/openssl/bin:$PATH"
 
-# Claude Code via Anthropic API (claude.ai) - bypasses the Nix Bedrock wrapper                              
   cai() {                                           
-    local wrapper real_binary                                                                                 
-    wrapper="$(which claude)"                                                                                 
-    real_binary=$(sed -n 's/^exec -a "\$0" "\([^"]*\)".*/\1/p' "$wrapper")
-    if [ -z "$real_binary" ]; then                                                                            
-      echo "Error: Could not extract claude binary path from $wrapper"                                        
-      return 1                                                                                                
-    fi                                                                                                        
-    CLAUDE_CODE_USE_BEDROCK="" "$real_binary" --dangerously-skip-permissions "$@"
+	claude --dangerously-skip-permissions
   }
 export PATH="$HOME/.local/bin:$PATH"
 
 # Git alias
 alias g="git"
-
+alias lg="lazygit"
+alias bi="brew install"
 
 # Creates cdd command with autocomplete
 autoload -Uz compinit && compinit
@@ -92,3 +85,14 @@ _cdd_completions() {
 }
 
 compdef _cdd_completions cdd
+
+# bun completions
+[ -s "/Users/eshaanmehta/.bun/_bun" ] && source "/Users/eshaanmehta/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
