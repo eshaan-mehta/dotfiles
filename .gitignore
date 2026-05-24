@@ -1,1 +1,6 @@
 .auto-sync.log
+
+# local-only overrides
+.zshenv.local
+.zshrc.local
+.gitconfig.local

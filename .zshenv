@@ -1,20 +1,39 @@
-export PATH="/usr/local/bin:$PATH"
-envfile="$HOME/.gnupg/gpg-agent.env"
-if ( [[ ! -e "$HOME/.gnupg/S.gpg-agent" ]] && \
-     [[ ! -e "/var/run/user/$(id -u)/gnupg/S.gpg-agent" ]] );
-then
-  killall pinentry > /dev/null 2>&1
-  gpgconf --reload scdaemon > /dev/null 2>&1
-  pkill -x -INT gpg-agent > /dev/null 2>&1
-  gpg-agent --daemon --enable-ssh-support > $envfile
+# Minimal, safe environment for *all* zsh invocations.
+# Keep this file portable across machines.
+
+# PATH: support Apple Silicon + Intel Homebrew if present.
+if [ -d "/opt/homebrew/bin" ]; then
+  export PATH="/opt/homebrew/bin:$PATH"
+fi
+if [ -d "/usr/local/bin" ]; then
+  export PATH="/usr/local/bin:$PATH"
 fi
 
-# Wake up smartcard to avoid races
-gpg --card-status > /dev/null 2>&1
+# Default editor
+export EDITOR="nvim"
+export VISUAL="nvim"
 
-source "$envfile"
-export GH_TOKEN="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"
-export GITHUB_TOKEN="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"
-export NIX_CONFIG="access-tokens = github.com=$GITHUB_TOKEN"
+# Optional GPG agent env (only if GPG tooling exists on this machine)
+if command -v gpg-agent >/dev/null 2>&1; then
+  envfile="$HOME/.gnupg/gpg-agent.env"
 
-eval "$(direnv hook zsh)"
+  if ( [[ ! -e "$HOME/.gnupg/S.gpg-agent" ]] && \
+       [[ ! -e "/var/run/user/$(id -u)/gnupg/S.gpg-agent" ]] );
+  then
+    killall pinentry > /dev/null 2>&1 || true
+    gpgconf --reload scdaemon > /dev/null 2>&1 || true
+    pkill -x -INT gpg-agent > /dev/null 2>&1 || true
+    gpg-agent --daemon --enable-ssh-support > "$envfile" 2>/dev/null || true
+  fi
+
+  command -v gpg >/dev/null 2>&1 && gpg --card-status > /dev/null 2>&1 || true
+  [ -f "$envfile" ] && source "$envfile"
+fi
+
+# Optional direnv
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi
+
+# Local-only machine secrets/overrides (NOT tracked)
+[ -f "$HOME/.zshenv.local" ] && source "$HOME/.zshenv.local"
