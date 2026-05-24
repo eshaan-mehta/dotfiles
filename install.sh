@@ -6,6 +6,10 @@
 # WHAT TO DO ON A NEW MACHINE
 # ============================================================================
 #
+# Quick path:
+#   cd ~/dotfiles && ./bootstrap.sh
+#
+#
 # 1. Clone this repo to ~/dotfiles:
 #      git clone https://github.com/eshaan-mehta/dotfiles ~/dotfiles
 #
