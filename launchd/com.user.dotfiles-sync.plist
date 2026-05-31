@@ -15,8 +15,7 @@
         <string>__HOME__/dotfiles/bin/auto-sync.sh</string>
     </array>
 
-    <!-- Run when files in the dotfiles dir change.
-         Note: WatchPaths only watches the top level, not subdirectories. -->
+    <!-- Run when any file in the dotfiles dir changes (recursive via FSEvents). -->
     <key>WatchPaths</key>
     <array>
         <string>__HOME__/dotfiles</string>
