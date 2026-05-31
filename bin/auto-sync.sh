@@ -18,8 +18,15 @@ fi
 
 git add -A
 
+DIFF=$(git diff --staged)
+MSG=$(echo "$DIFF" | ollama run tavernari/git-commit-message:mini --nowordwrap 2>/dev/null | tr '\n' ' ' | xargs || true)
+
+if [ -z "$MSG" ]; then
+    MSG="auto-sync: $(date '+%Y-%m-%d %H:%M:%S %Z') on $(hostname -s)"
+fi
+
 # -c commit.gpgsign=false bypasses Yubikey GPG signing — auto-commits run
 # in the background and can't touch the Yubikey.
-git -c commit.gpgsign=false commit -m "auto-sync: $(date '+%Y-%m-%d %H:%M:%S %Z') on $(hostname -s)"
+git -c commit.gpgsign=false commit -m "$MSG"
 
 git push origin main

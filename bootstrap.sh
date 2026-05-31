@@ -46,6 +46,12 @@ fi
 
 cd "$REPO_DIR"
 
+if command -v brew &>/dev/null; then
+    brew bundle --file="$REPO_DIR/Brewfile"
+else
+    echo "Warning: homebrew not found, skipping Brewfile install" >&2
+fi
+
 backup_dir="$HOME/.dotfiles-backup-$(date +%F-%H%M%S)"
 mkdir -p "$backup_dir"
 echo "Backup dir: $backup_dir"
