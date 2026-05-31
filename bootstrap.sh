@@ -52,6 +52,10 @@ else
     echo "Warning: homebrew not found, skipping Brewfile install" >&2
 fi
 
+if ! command -v claude &>/dev/null; then
+    curl -fsSL https://claude.ai/install.sh | bash
+fi
+
 backup_dir="$HOME/.dotfiles-backup-$(date +%F-%H%M%S)"
 mkdir -p "$backup_dir"
 echo "Backup dir: $backup_dir"
