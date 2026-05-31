@@ -19,7 +19,7 @@ fi
 git add -A
 
 DIFF=$(git diff --staged)
-MSG=$(echo "$DIFF" | ollama run tavernari/git-commit-message:sp_commit_mini --nowordwrap 2>/dev/null | tr '\n' ' ' | xargs || true)
+MSG=$(echo "$DIFF" | ollama run dotfiles-commit --nowordwrap 2>/dev/null | tr '\n' ' ' | xargs || true)
 
 if [ -z "$MSG" ]; then
     MSG="auto-sync: $(date '+%Y-%m-%d %H:%M:%S %Z') on $(hostname -s)"
