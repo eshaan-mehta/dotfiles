@@ -4,7 +4,15 @@ set -euo pipefail
 # One-shot setup for this dotfiles repo.
 # - Symlinks selected files into $HOME
 # - Links LazyVim: ~/.config/nvim -> ~/dotfiles/config/nvim
-# - Installs/loads the auto-sync LaunchAgent
+#
+# COMMON USAGE:
+#   ./bootstrap.sh                 Standard setup on a new machine (no auto-sync)
+#   ./install.sh                   Add auto-sync later (macOS only — uses launchd FSEvents watcher
+#                                  to auto-commit+push dotfile changes to GitHub)
+#   ./bootstrap.sh --no-git        Skip gitconfig link (keep machine's existing git identity)
+#
+# Auto-sync is OFF by default. It watches ~/dotfiles for changes and commits+pushes automatically.
+# Only install it on machines where you want that behaviour.
 
 REPO_DIR="$HOME/dotfiles"
 
