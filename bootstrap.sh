@@ -19,10 +19,10 @@ REPO_DIR="$HOME/dotfiles"
 usage() {
   cat <<USAGE
 Usage:
-  ./bootstrap.sh [--no-sync] [--no-nvim] [--no-shell] [--no-git]
+  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git]
+  ./install.sh                   (to add auto-sync separately)
 
 Flags:
-  --no-sync   Skip installing launchd auto-sync
   --no-nvim   Skip linking LazyVim config
   --no-shell  Skip linking shell dotfiles (.zshrc/.zshenv/.bash*)
   --no-git    Skip linking gitconfig
