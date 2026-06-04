@@ -4,15 +4,13 @@ set -euo pipefail
 # One-shot setup for this dotfiles repo.
 # - Symlinks selected files into $HOME
 # - Links LazyVim: ~/.config/nvim -> ~/dotfiles/config/nvim
+# - Optionally installs Claude Code, the auto-sync agent, and its Ollama model
+#
+# Safe to rerun — symlinks are idempotent, optional installs only prompt when not yet installed.
 #
 # COMMON USAGE:
-#   ./bootstrap.sh                 Standard setup on a new machine (no auto-sync)
-#   ./install.sh                   Add auto-sync later (macOS only — uses launchd FSEvents watcher
-#                                  to auto-commit+push dotfile changes to GitHub)
+#   ./bootstrap.sh                 Standard setup, prompts for optional installs
 #   ./bootstrap.sh --no-git        Skip gitconfig link (keep machine's existing git identity)
-#
-# Auto-sync is OFF by default. It watches ~/dotfiles for changes and commits+pushes automatically.
-# Only install it on machines where you want that behaviour.
 #
 # MACHINE-SPECIFIC OVERRIDES (create these manually after bootstrap — not tracked in dotfiles):
 #   ~/.gitconfig.local             Git identity (name + email) for this machine. Required — git
@@ -28,7 +26,6 @@ usage() {
   cat <<USAGE
 Usage:
   ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git]
-  ./install.sh                   (to add auto-sync separately)
 
 Flags:
   --no-nvim   Skip linking LazyVim config
@@ -37,18 +34,16 @@ Flags:
 USAGE
 }
 
-DO_SYNC=0
 DO_NVIM=1
 DO_SHELL=1
 DO_GIT=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --no-sync) DO_SYNC=0 ;;
-    --no-nvim) DO_NVIM=0 ;;
+    --no-nvim)  DO_NVIM=0 ;;
     --no-shell) DO_SHELL=0 ;;
-    --no-git) DO_GIT=0 ;;
-    -h|--help) usage; exit 0 ;;
+    --no-git)   DO_GIT=0 ;;
+    -h|--help)  usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
   esac
   shift
@@ -68,12 +63,30 @@ else
     echo "Warning: homebrew not found, skipping Brewfile install" >&2
 fi
 
+# --- Optional installs (prompt only when not already present) ---
+
 if ! command -v claude &>/dev/null; then
     read -r -p "Install Claude Code? [y/N] " _reply
     if [[ "$_reply" =~ ^[Yy]$ ]]; then
         curl -fsSL https://claude.ai/install.sh | bash
     fi
 fi
+
+if command -v ollama &>/dev/null && ! ollama list 2>/dev/null | grep -q "dotfiles-commit"; then
+    read -r -p "Install dotfiles-commit Ollama model (used by auto-sync for commit messages)? [y/N] " _reply
+    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+        ollama create dotfiles-commit -f "$REPO_DIR/config/ollama/Modelfile"
+    fi
+fi
+
+if [ ! -f "$HOME/Library/LaunchAgents/com.user.dotfiles-sync.plist" ]; then
+    read -r -p "Install auto-sync agent (watches ~/dotfiles, auto-commits+pushes changes)? [y/N] " _reply
+    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+        bash "$REPO_DIR/install.sh"
+    fi
+fi
+
+# --- Symlinks ---
 
 backup_dir="$HOME/.dotfiles-backup-$(date +%F-%H%M%S)"
 mkdir -p "$backup_dir"
@@ -94,7 +107,7 @@ link_file() {
 }
 
 if [ "$DO_SHELL" -eq 1 ]; then
-  for f in .zshrc .zshenv .bash_profile .bashrc .direnvrc; do
+  for f in .zshrc .zshenv .bash_profile .bashrc; do
     if [ -e "$REPO_DIR/$f" ]; then
       link_file "$REPO_DIR/$f" "$HOME/$f"
     fi
@@ -115,10 +128,6 @@ if [ "$DO_NVIM" -eq 1 ]; then
   else
     echo "Note: $REPO_DIR/config/nvim not found; skipping nvim link" >&2
   fi
-fi
-
-if [ "$DO_SYNC" -eq 1 ]; then
-  bash "$REPO_DIR/install.sh"
 fi
 
 echo "Done."
