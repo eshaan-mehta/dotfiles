@@ -13,6 +13,14 @@ set -euo pipefail
 #
 # Auto-sync is OFF by default. It watches ~/dotfiles for changes and commits+pushes automatically.
 # Only install it on machines where you want that behaviour.
+#
+# MACHINE-SPECIFIC OVERRIDES (create these manually after bootstrap — not tracked in dotfiles):
+#   ~/.gitconfig.local             Git identity (name + email) for this machine. Required — git
+#                                  commits will fail without it. Example:
+#                                    [user]
+#                                      email = you@example.com
+#                                      name  = Your Name
+#   ~/.zshrc.local                 Shell config specific to this machine (work tools, aliases, etc.)
 
 REPO_DIR="$HOME/dotfiles"
 
