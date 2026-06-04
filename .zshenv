@@ -30,10 +30,5 @@ if command -v gpg-agent >/dev/null 2>&1; then
   [ -f "$envfile" ] && source "$envfile"
 fi
 
-# Optional direnv
-if command -v direnv >/dev/null 2>&1; then
-  eval "$(direnv hook zsh)"
-fi
-
 # Local-only machine secrets/overrides (NOT tracked)
 [ -f "$HOME/.zshenv.local" ] && source "$HOME/.zshenv.local"

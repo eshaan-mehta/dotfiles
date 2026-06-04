@@ -61,7 +61,10 @@ else
 fi
 
 if ! command -v claude &>/dev/null; then
-    curl -fsSL https://claude.ai/install.sh | bash
+    read -r -p "Install Claude Code? [y/N] " _reply
+    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+        curl -fsSL https://claude.ai/install.sh | bash
+    fi
 fi
 
 backup_dir="$HOME/.dotfiles-backup-$(date +%F-%H%M%S)"
