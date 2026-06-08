@@ -130,6 +130,11 @@ if [ "$DO_NVIM" -eq 1 ]; then
   fi
 fi
 
+mkdir -p "$HOME/.config/git"
+if [ -e "$REPO_DIR/config/git/ignore" ]; then
+  link_file "$REPO_DIR/config/git/ignore" "$HOME/.config/git/ignore"
+fi
+
 ghostty_dir="$HOME/Library/Application Support/com.mitchellh.ghostty"
 if [ -e "$REPO_DIR/config/ghostty/config.ghostty" ]; then
   mkdir -p "$ghostty_dir"
