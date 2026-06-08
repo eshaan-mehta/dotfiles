@@ -142,3 +142,5 @@ if [ -e "$REPO_DIR/config/ghostty/config.ghostty" ]; then
 fi
 
 echo "Done."
+echo ""
+echo "Apply shell changes: source ~/.zshrc"
