@@ -32,3 +32,4 @@ fi
 
 # Local-only machine secrets/overrides (NOT tracked)
 [ -f "$HOME/.zshenv.local" ] && source "$HOME/.zshenv.local"
+. "$HOME/.cargo/env"

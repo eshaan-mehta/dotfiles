@@ -47,3 +47,4 @@ alias git="/opt/homebrew/bin/git"
 
 
 export PATH="${HOMEBREW_PREFIX}/opt/openssl/bin:$PATH"
+. "$HOME/.cargo/env"
