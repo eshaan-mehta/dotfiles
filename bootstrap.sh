@@ -112,6 +112,23 @@ else
     echo "Warning: homebrew not found, skipping Brewfile install" >&2
 fi
 
+# --- oh-my-zsh ---
+#
+# Installed unprompted because .zshrc depends on it. Not a brew formula, so it
+# can't ride along in the Brewfile.
+#
+# --keep-zshrc is essential: without it the installer replaces ~/.zshrc with its
+# own template, and it treats a symlink as replaceable too — so it would silently
+# swap out the link to this repo. --unattended skips the shell change and stops
+# it launching an interactive zsh at the end.
+if [ -d "$HOME/.oh-my-zsh" ]; then
+    echo "oh-my-zsh: already installed"
+else
+    echo "oh-my-zsh: installing"
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" \
+        "" --unattended --keep-zshrc
+fi
+
 # --- Optional installs (prompt only when not already present) ---
 
 if command -v claude &>/dev/null; then
