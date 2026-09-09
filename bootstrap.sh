@@ -26,12 +26,7 @@ set -euo pipefail
 
 REPO_DIR="$HOME/dotfiles"
 
-# Takes no arguments. Rejected rather than ignored, so an old flag typed out of
-# habit fails loudly instead of looking like it did something.
-if [ $# -gt 0 ]; then
-  echo "Error: bootstrap.sh takes no arguments (got: $*)" >&2
-  exit 2
-fi
+# Takes no arguments; anything passed is ignored.
 
 # --- Prompt helpers ---
 #
