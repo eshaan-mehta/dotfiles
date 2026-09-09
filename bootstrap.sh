@@ -31,13 +31,14 @@ REPO_DIR="$HOME/dotfiles"
 usage() {
   cat <<USAGE
 Usage:
-  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git] [--no-ssh]
+  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git] [--no-ssh] [--yes]
 
 Flags:
   --no-nvim   Skip linking LazyVim config
   --no-shell  Skip linking shell dotfiles (.zshrc/.zshenv/.bash*)
   --no-git    Skip linking gitconfig
   --no-ssh    Skip deploy key generation, ssh config link, and remote setup
+  --yes, -y   Take the default for every prompt instead of asking
 USAGE
 }
 
