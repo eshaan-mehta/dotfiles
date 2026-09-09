@@ -13,7 +13,6 @@ set -euo pipefail
 #   ./bootstrap.sh                 Standard setup, prompts for optional installs
 #   ./bootstrap.sh --no-git        Skip gitconfig link (keep machine's existing git identity)
 #   ./bootstrap.sh --no-ssh        Skip the deploy key / ssh config / remote setup
-#   ./bootstrap.sh --yes           Answer every prompt with its default (no questions)
 #
 # Anything that varies between machines is asked as a question here rather than
 # left as a manual step, and the answers are written to untracked files:
@@ -23,22 +22,21 @@ set -euo pipefail
 #   ~/.gitconfig.scoped            Written only if that identity is restricted to one directory.
 #   ~/.zshrc.local                 Shell config specific to this machine. Still manual.
 #
-# Prompts are skipped when there's no terminal or when --yes is passed, so a
-# piped or CI run completes with defaults instead of dying on a question.
+# Prompts are skipped when there's no terminal, so a piped run completes with
+# defaults instead of dying on a question.
 
 REPO_DIR="$HOME/dotfiles"
 
 usage() {
   cat <<USAGE
 Usage:
-  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git] [--no-ssh] [--yes]
+  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git] [--no-ssh]
 
 Flags:
   --no-nvim   Skip linking LazyVim config
   --no-shell  Skip linking shell dotfiles (.zshrc/.zshenv/.bash*)
   --no-git    Skip linking gitconfig
   --no-ssh    Skip deploy key generation, ssh config link, and remote setup
-  --yes, -y   Take the default for every prompt instead of asking
 USAGE
 }
 
@@ -46,7 +44,6 @@ DO_NVIM=1
 DO_SHELL=1
 DO_GIT=1
 DO_SSH=1
-ASSUME_YES=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,7 +51,6 @@ while [ $# -gt 0 ]; do
     --no-shell) DO_SHELL=0 ;;
     --no-git)   DO_GIT=0 ;;
     --no-ssh)   DO_SSH=0 ;;
-    --yes|-y)   ASSUME_YES=1 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -64,18 +60,17 @@ done
 # --- Prompt helpers ---
 #
 # Every question goes through these, so a run without a terminal (piped
-# installer, CI, --yes) can't hang or die partway. A bare `read` returns
+# installer, CI) can't hang or die partway. A bare `read` returns
 # non-zero at EOF and `set -e` turns that into an abort — which used to kill
 # this script at the first prompt on any non-interactive run, before it had
 # linked anything.
 
-can_prompt() { [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; }
+can_prompt() { [ -t 0 ]; }
 
 # confirm <prompt> [default:y|n] — true for yes
 confirm() {
   local prompt="$1" default="${2:-n}" reply="" hint="[y/N]"
   [ "$default" = "y" ] && hint="[Y/n]"
-  if [ "$ASSUME_YES" -eq 1 ]; then return 0; fi
   if ! can_prompt; then [ "$default" = "y" ]; return; fi
   read -r -p "$prompt $hint " reply || reply=""
   [[ "${reply:-$default}" =~ ^[Yy]$ ]]
@@ -149,13 +144,14 @@ fi
 
 # --- Symlinks ---
 
+# Named up front so messages can reference it, but only created when something
+# is actually displaced — otherwise every re-run leaves an empty directory in $HOME.
 backup_dir="$HOME/.dotfiles-backup-$(date +%F-%H%M%S)"
-mkdir -p "$backup_dir"
-echo "Backup dir: $backup_dir"
 
 backup_if_needed() {
   local target="$1"
   if [ -e "$target" ] && [ ! -L "$target" ]; then
+    mkdir -p "$backup_dir"
     mv "$target" "$backup_dir/"
   fi
 }
