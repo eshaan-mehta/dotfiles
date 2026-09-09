@@ -1,9 +1,11 @@
 [user]
-	name = Eshaan Mehta
-	# GitHub noreply address — attributes commits to the account without
-	# publishing a real address in this public repo. Override per-machine or
-	# per-directory in ~/.gitconfig.local (included at the bottom, so it wins).
-	email = 114041487+eshaan-mehta@users.noreply.github.com
+	# No identity set here on purpose — it comes from the includes at the
+	# bottom of this file. See the comments there for how the two interact.
+	#
+	# Never fall back to guessing an identity from username@hostname. A guessed
+	# address silently misattributes commits; this repo already carries four
+	# different author addresses because of it. Fail loudly instead.
+	useConfigOnly = true
 
 [filter "lfs"]
 	process = git-lfs filter-process
@@ -51,5 +53,16 @@
             		git fetch && git checkout \"$1\"; \
         	fi && git pull; \
     	}; f"
+# This machine's default identity. Not tracked — create it per laptop with
+# whatever that machine needs (work address, signing key, and so on).
 [include]
 	path = ~/.gitconfig.local
+
+# Anything under ~/dotfiles always commits as the personal identity.
+#
+# This block is LAST on purpose. Git reads config top to bottom and the last
+# value wins, so this overrides ~/.gitconfig.local no matter what that file
+# sets. Put it above the include and a work address would leak into this
+# public repo's history instead.
+[includeIf "gitdir:~/dotfiles/"]
+	path = ~/dotfiles/config/git/personal

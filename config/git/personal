@@ -1,0 +1,8 @@
+# Personal identity. Applied to anything under ~/dotfiles via the includeIf at
+# the bottom of ~/.gitconfig, which is ordered to win over ~/.gitconfig.local.
+#
+# The email is the GitHub noreply address: commits still attribute to the
+# account, but no real address is published in this public repo.
+[user]
+	name = Eshaan Mehta
+	email = 114041487+eshaan-mehta@users.noreply.github.com
