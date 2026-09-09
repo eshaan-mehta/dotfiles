@@ -12,7 +12,6 @@ set -euo pipefail
 #
 # COMMON USAGE:
 #   ./bootstrap.sh                 Standard setup, prompts for optional installs
-#   ./bootstrap.sh --no-ssh        Skip the deploy key / ssh config / remote setup
 #
 # Anything that varies between machines is asked as a question here rather than
 # left as a manual step, and the answers are written to untracked files:
@@ -30,18 +29,12 @@ REPO_DIR="$HOME/dotfiles"
 usage() {
   cat <<USAGE
 Usage:
-  ./bootstrap.sh [--no-ssh]
-
-Flags:
-  --no-ssh    Skip deploy key generation, ssh config link, and remote setup
+  ./bootstrap.sh
 USAGE
 }
 
-DO_SSH=1
-
 while [ $# -gt 0 ]; do
   case "$1" in
-    --no-ssh)   DO_SSH=0 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -296,87 +289,85 @@ fi
 # repo's automation independent of whatever account-level keys the machine uses
 # for everything else.
 
-if [ "$DO_SSH" -eq 1 ]; then
-  ssh_key="$HOME/.ssh/id_dotfiles"
-  repo_slug="eshaan-mehta/dotfiles"
-  key_title="dotfiles-sync $(hostname -s)"
+ssh_key="$HOME/.ssh/id_dotfiles"
+repo_slug="eshaan-mehta/dotfiles"
+key_title="dotfiles-sync $(hostname -s)"
 
-  mkdir -p "$HOME/.ssh"
-  chmod 700 "$HOME/.ssh"
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
 
-  if [ -e "$REPO_DIR/.ssh/config" ]; then
-    link_file "$REPO_DIR/.ssh/config" "$HOME/.ssh/config"
-  fi
+if [ -e "$REPO_DIR/.ssh/config" ]; then
+  link_file "$REPO_DIR/.ssh/config" "$HOME/.ssh/config"
+fi
 
-  # Two separate pieces of state, and conflating them is confusing: the key file
-  # on this disk, and whether its public half is registered on the repo. Report
-  # them independently.
-  if [ -f "$ssh_key" ]; then
-    _fp=$(ssh-keygen -lf "$ssh_key.pub" 2>/dev/null | awk '{print $2}' || true)
-    echo "Key file on this machine: $ssh_key${_fp:+ ($_fp)}"
-    if confirm "Regenerate it? The current key stops working until you delete it from $repo_slug and add the new one"; then
-      rm -f "$ssh_key" "$ssh_key.pub"
-      echo "Generating key file: $ssh_key"
-      ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
-    fi
-  else
+# Two separate pieces of state, and conflating them is confusing: the key file
+# on this disk, and whether its public half is registered on the repo. Report
+# them independently.
+if [ -f "$ssh_key" ]; then
+  _fp=$(ssh-keygen -lf "$ssh_key.pub" 2>/dev/null | awk '{print $2}' || true)
+  echo "Key file on this machine: $ssh_key${_fp:+ ($_fp)}"
+  if confirm "Regenerate it? The current key stops working until you delete it from $repo_slug and add the new one"; then
+    rm -f "$ssh_key" "$ssh_key.pub"
     echo "Generating key file: $ssh_key"
     ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
   fi
+else
+  echo "Generating key file: $ssh_key"
+  ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
+fi
 
-  # Registration is deliberately manual, with no gh option. Any deploy key
-  # created through the API — gh, a PAT, anything — belongs to the token that
-  # created it, and GitHub deletes the key when that token is revoked, rotated,
-  # or de-authorized. A key added in the browser has no owning token and
-  # outlives all of them.
-  keys_url="https://github.com/$repo_slug/settings/keys"
+# Registration is deliberately manual, with no gh option. Any deploy key
+# created through the API — gh, a PAT, anything — belongs to the token that
+# created it, and GitHub deletes the key when that token is revoked, rotated,
+# or de-authorized. A key added in the browser has no owning token and
+# outlives all of them.
+keys_url="https://github.com/$repo_slug/settings/keys"
 
-  # Ask GitHub whether the key actually works, rather than matching a title.
-  # `ssh -T` always exits non-zero here (GitHub grants no shell), so capture the
-  # output instead of piping — under pipefail a pipeline would report failure
-  # even when the check succeeds.
-  key_authenticates() {
-    local out
-    out=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-              -o ConnectTimeout=8 -T git@github-dotfiles 2>&1 || true)
-    [[ "$out" == *"successfully authenticated"* ]]
-  }
+# Ask GitHub whether the key actually works, rather than matching a title.
+# `ssh -T` always exits non-zero here (GitHub grants no shell), so capture the
+# output instead of piping — under pipefail a pipeline would report failure
+# even when the check succeeds.
+key_authenticates() {
+  local out
+  out=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=8 -T git@github-dotfiles 2>&1 || true)
+  [[ "$out" == *"successfully authenticated"* ]]
+}
 
-  if key_authenticates; then
-    echo "Deploy key authenticates to $repo_slug"
-  else
-    echo "Key is not registered on $repo_slug — auto-sync can commit but not push."
-    pbcopy < "$ssh_key.pub"
-    echo ""
-    echo "Public key copied to the clipboard:"
-    echo "  $(cat "$ssh_key.pub")"
-    echo ""
-    echo "Add deploy key -> paste -> title it \"$key_title\""
-    echo "-> tick \"Allow write access\" -> Add key."
-    echo ""
-    if can_prompt; then
-      open "$keys_url"
-      confirm "Added it? (no = finish setup and add it later)" y || true
-      if key_authenticates; then
-        echo "Verified: the key authenticates to $repo_slug"
-      else
-        echo "Still not authenticating. Add it later at $keys_url" >&2
-      fi
+if key_authenticates; then
+  echo "Deploy key authenticates to $repo_slug"
+else
+  echo "Key is not registered on $repo_slug — auto-sync can commit but not push."
+  pbcopy < "$ssh_key.pub"
+  echo ""
+  echo "Public key copied to the clipboard:"
+  echo "  $(cat "$ssh_key.pub")"
+  echo ""
+  echo "Add deploy key -> paste -> title it \"$key_title\""
+  echo "-> tick \"Allow write access\" -> Add key."
+  echo ""
+  if can_prompt; then
+    open "$keys_url"
+    confirm "Added it? (no = finish setup and add it later)" y || true
+    if key_authenticates; then
+      echo "Verified: the key authenticates to $repo_slug"
     else
-      echo "  $keys_url"
+      echo "Still not authenticating. Add it later at $keys_url" >&2
     fi
+  else
+    echo "  $keys_url"
   fi
+fi
 
-  # Point this clone at the alias defined in .ssh/config so it uses the scoped
-  # key. This lives in .git/config, which isn't tracked — hence doing it here,
-  # so every machine gets it from bootstrap rather than by hand.
-  desired_remote="git@github-dotfiles:$repo_slug.git"
-  current_remote=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)
-  if [ "$current_remote" = "$desired_remote" ]; then
-    echo "origin already points at the scoped alias"
-  elif confirm "Change origin from ${current_remote:-unset} to $desired_remote?" y; then
-    git remote set-url origin "$desired_remote"
-  fi
+# Point this clone at the alias defined in .ssh/config so it uses the scoped
+# key. This lives in .git/config, which isn't tracked — hence doing it here,
+# so every machine gets it from bootstrap rather than by hand.
+desired_remote="git@github-dotfiles:$repo_slug.git"
+current_remote=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)
+if [ "$current_remote" = "$desired_remote" ]; then
+  echo "origin already points at the scoped alias"
+elif confirm "Change origin from ${current_remote:-unset} to $desired_remote?" y; then
+  git remote set-url origin "$desired_remote"
 fi
 
 echo "Done."
