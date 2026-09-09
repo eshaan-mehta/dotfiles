@@ -309,59 +309,68 @@ if [ "$DO_SSH" -eq 1 ]; then
     link_file "$REPO_DIR/.ssh/config" "$HOME/.ssh/config"
   fi
 
+  # Two separate pieces of state, and conflating them is confusing: the key file
+  # on this disk, and whether its public half is registered on the repo. Report
+  # them independently.
   if [ -f "$ssh_key" ]; then
     _fp=$(ssh-keygen -lf "$ssh_key.pub" 2>/dev/null | awk '{print $2}' || true)
-    echo "Deploy key already exists: $ssh_key${_fp:+ ($_fp)}"
-    if confirm "Regenerate it? Pushes fail until the old key is removed from $repo_slug and the new one added"; then
+    echo "Key file on this machine: $ssh_key${_fp:+ ($_fp)}"
+    if confirm "Regenerate it? The current key stops working until you delete it from $repo_slug and add the new one"; then
       rm -f "$ssh_key" "$ssh_key.pub"
-      echo "Generating deploy key: $ssh_key"
+      echo "Generating key file: $ssh_key"
       ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
     fi
   else
-    echo "Generating deploy key: $ssh_key"
+    echo "Generating key file: $ssh_key"
     ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
   fi
 
-  # Register the pubkey, unless this machine's key is already on the repo.
-  #
-  # Caveat: a deploy key added via gh is bound to the gh auth token — revoking
-  # or de-authorizing that token deletes the key too, and auto-sync starts
-  # failing. Adding it by hand in the web UI avoids that coupling; the manual
-  # path below prints everything needed to do so.
+  # Any deploy key created through the API belongs to the token that created it
+  # — GitHub deletes the key when that token is revoked, rotated, or
+  # de-authorized. That applies to gh and to a PAT alike, so the browser is the
+  # only route to a key that outlives every token.
+  keys_url="https://github.com/$repo_slug/settings/keys"
   registered=0
   if command -v gh &>/dev/null; then
     existing=$(gh repo deploy-key list -R "$repo_slug" --json title --jq '.[].title' 2>/dev/null || true)
     if printf '%s\n' "$existing" | grep -qxF "$key_title"; then
-      echo "Deploy key \"$key_title\" is already registered on $repo_slug"
+      echo "Registered on $repo_slug as \"$key_title\""
       registered=1
-    else
-      echo ""
-      echo "This key must be added to $repo_slug before auto-sync can push."
-      echo "  yes  gh adds it now. GitHub links the key to your gh login and"
-      echo "       deletes it if that login is ever revoked or re-authenticated,"
-      echo "       which stops auto-sync without warning."
-      echo "  no   print the key and add it once at the repo's settings page."
-      echo "       Slower, but nothing else can remove it."
-      if confirm "Add it with gh?"; then
-        if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
-          echo "Registered deploy key \"$key_title\" on $repo_slug"
-          registered=1
-        else
-          echo "gh could not add the key (not authenticated, or missing scope)" >&2
-        fi
+    fi
+  fi
+
+  if [ "$registered" -eq 0 ]; then
+    echo "Not yet registered on $repo_slug — auto-sync can commit but not push."
+    echo ""
+    echo "  yes  gh registers it now, no browser. GitHub ties the key to your gh"
+    echo "       login and deletes it if that login is revoked or re-authenticated."
+    echo "  no   copy the key and open the settings page to add it by hand."
+    echo "       Nothing can remove it afterwards."
+    if command -v gh &>/dev/null && confirm "Register it with gh?"; then
+      if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
+        echo "Registered \"$key_title\" on $repo_slug"
+        registered=1
+      else
+        echo "gh could not add the key (not authenticated, or missing scope)" >&2
       fi
     fi
   fi
 
   if [ "$registered" -eq 0 ]; then
-    echo "" >&2
-    echo "Add this deploy key to the repo, ticking \"Allow write access\":" >&2
-    echo "  https://github.com/$repo_slug/settings/keys" >&2
-    echo "" >&2
-    cat "$ssh_key.pub" >&2
-    echo "" >&2
-    echo "Until it's added, auto-sync can commit but not push." >&2
-    echo "" >&2
+    pbcopy < "$ssh_key.pub"
+    echo ""
+    echo "Public key copied to the clipboard:"
+    echo "  $(cat "$ssh_key.pub")"
+    echo ""
+    echo "On the page opening now: Add deploy key -> paste -> title it"
+    echo "\"$key_title\" -> tick \"Allow write access\" -> Add key."
+    if can_prompt; then
+      open "$keys_url"
+    else
+      echo "  $keys_url"
+    fi
+    echo ""
+    confirm "Added it? (no = finish setup and add it later)" y || true
   fi
 
   # Point this clone at the alias defined in .ssh/config so it uses the scoped
