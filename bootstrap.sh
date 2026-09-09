@@ -325,52 +325,47 @@ if [ "$DO_SSH" -eq 1 ]; then
     ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
   fi
 
-  # Any deploy key created through the API belongs to the token that created it
-  # — GitHub deletes the key when that token is revoked, rotated, or
-  # de-authorized. That applies to gh and to a PAT alike, so the browser is the
-  # only route to a key that outlives every token.
+  # Registration is deliberately manual, with no gh option. Any deploy key
+  # created through the API — gh, a PAT, anything — belongs to the token that
+  # created it, and GitHub deletes the key when that token is revoked, rotated,
+  # or de-authorized. A key added in the browser has no owning token and
+  # outlives all of them.
   keys_url="https://github.com/$repo_slug/settings/keys"
-  registered=0
-  if command -v gh &>/dev/null; then
-    existing=$(gh repo deploy-key list -R "$repo_slug" --json title --jq '.[].title' 2>/dev/null || true)
-    if printf '%s\n' "$existing" | grep -qxF "$key_title"; then
-      echo "Registered on $repo_slug as \"$key_title\""
-      registered=1
-    fi
-  fi
 
-  if [ "$registered" -eq 0 ]; then
-    echo "Not yet registered on $repo_slug — auto-sync can commit but not push."
-    echo ""
-    echo "  yes  gh registers it now, no browser. GitHub ties the key to your gh"
-    echo "       login and deletes it if that login is revoked or re-authenticated."
-    echo "  no   copy the key and open the settings page to add it by hand."
-    echo "       Nothing can remove it afterwards."
-    if command -v gh &>/dev/null && confirm "Register it with gh?"; then
-      if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
-        echo "Registered \"$key_title\" on $repo_slug"
-        registered=1
-      else
-        echo "gh could not add the key (not authenticated, or missing scope)" >&2
-      fi
-    fi
-  fi
+  # Ask GitHub whether the key actually works, rather than matching a title.
+  # `ssh -T` always exits non-zero here (GitHub grants no shell), so capture the
+  # output instead of piping — under pipefail a pipeline would report failure
+  # even when the check succeeds.
+  key_authenticates() {
+    local out
+    out=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout=8 -T git@github-dotfiles 2>&1 || true)
+    [[ "$out" == *"successfully authenticated"* ]]
+  }
 
-  if [ "$registered" -eq 0 ]; then
+  if key_authenticates; then
+    echo "Deploy key authenticates to $repo_slug"
+  else
+    echo "Key is not registered on $repo_slug — auto-sync can commit but not push."
     pbcopy < "$ssh_key.pub"
     echo ""
     echo "Public key copied to the clipboard:"
     echo "  $(cat "$ssh_key.pub")"
     echo ""
-    echo "On the page opening now: Add deploy key -> paste -> title it"
-    echo "\"$key_title\" -> tick \"Allow write access\" -> Add key."
+    echo "Add deploy key -> paste -> title it \"$key_title\""
+    echo "-> tick \"Allow write access\" -> Add key."
+    echo ""
     if can_prompt; then
       open "$keys_url"
+      confirm "Added it? (no = finish setup and add it later)" y || true
+      if key_authenticates; then
+        echo "Verified: the key authenticates to $repo_slug"
+      else
+        echo "Still not authenticating. Add it later at $keys_url" >&2
+      fi
     else
       echo "  $keys_url"
     fi
-    echo ""
-    confirm "Added it? (no = finish setup and add it later)" y || true
   fi
 
   # Point this clone at the alias defined in .ssh/config so it uses the scoped
