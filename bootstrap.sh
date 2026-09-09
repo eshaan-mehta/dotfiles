@@ -334,12 +334,21 @@ if [ "$DO_SSH" -eq 1 ]; then
     if printf '%s\n' "$existing" | grep -qxF "$key_title"; then
       echo "Deploy key \"$key_title\" is already registered on $repo_slug"
       registered=1
-    elif confirm "Register the deploy key using gh? (no = print it to add by hand, which keeps the key independent of your gh token)"; then
-      if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
-        echo "Registered deploy key \"$key_title\" on $repo_slug"
-        registered=1
-      else
-        echo "gh could not add the key (not authenticated, or missing scope)" >&2
+    else
+      echo ""
+      echo "This key must be added to $repo_slug before auto-sync can push."
+      echo "  yes  gh adds it now. GitHub links the key to your gh login and"
+      echo "       deletes it if that login is ever revoked or re-authenticated,"
+      echo "       which stops auto-sync without warning."
+      echo "  no   print the key and add it once at the repo's settings page."
+      echo "       Slower, but nothing else can remove it."
+      if confirm "Add it with gh?"; then
+        if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
+          echo "Registered deploy key \"$key_title\" on $repo_slug"
+          registered=1
+        else
+          echo "gh could not add the key (not authenticated, or missing scope)" >&2
+        fi
       fi
     fi
   fi
