@@ -1,3 +1,15 @@
+# oh-my-zsh. Sourced first so the customisations below override it rather than
+# the other way round. Guarded because it isn't a brew formula — a machine
+# without it still gets a working shell.
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git)
+if [ -d "$ZSH" ]; then
+    source "$ZSH/oh-my-zsh.sh"
+else
+    echo "note: oh-my-zsh not installed; run ~/dotfiles/bootstrap.sh to add it" >&2
+fi
+
 export PATH="${HOMEBREW_PREFIX}/opt/openssl/bin:$PATH"
 
 cai() {
