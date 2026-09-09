@@ -13,15 +13,18 @@ set -euo pipefail
 #   ./bootstrap.sh                 Standard setup, prompts for optional installs
 #   ./bootstrap.sh --no-git        Skip gitconfig link (keep machine's existing git identity)
 #   ./bootstrap.sh --no-ssh        Skip the deploy key / ssh config / remote setup
+#   ./bootstrap.sh --yes           Answer every prompt with its default (no questions)
 #
-# MACHINE-SPECIFIC OVERRIDES (create these manually after bootstrap — not tracked in dotfiles):
-#   ~/.gitconfig.local             Per-machine git overrides. Optional: the tracked .gitconfig
-#                                  already sets a default identity, and this file is included
-#                                  last so anything here wins. Use it to route a different
-#                                  identity at a directory, e.g.
-#                                    [includeIf "gitdir:~/some/dir/"]
-#                                      path = ~/.gitconfig.other
-#   ~/.zshrc.local                 Shell config specific to this machine (work tools, aliases, etc.)
+# Anything that varies between machines is asked as a question here rather than
+# left as a manual step, and the answers are written to untracked files:
+#   ~/.gitconfig.local             This machine's git identity, prompted for below. Everything
+#                                  outside ~/dotfiles uses it; ~/dotfiles always commits as the
+#                                  personal identity in config/git/personal.
+#   ~/.gitconfig.scoped            Written only if that identity is restricted to one directory.
+#   ~/.zshrc.local                 Shell config specific to this machine. Still manual.
+#
+# Prompts are skipped when there's no terminal or when --yes is passed, so a
+# piped or CI run completes with defaults instead of dying on a question.
 
 REPO_DIR="$HOME/dotfiles"
 
@@ -42,6 +45,7 @@ DO_NVIM=1
 DO_SHELL=1
 DO_GIT=1
 DO_SSH=1
+ASSUME_YES=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -49,11 +53,45 @@ while [ $# -gt 0 ]; do
     --no-shell) DO_SHELL=0 ;;
     --no-git)   DO_GIT=0 ;;
     --no-ssh)   DO_SSH=0 ;;
+    --yes|-y)   ASSUME_YES=1 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
   esac
   shift
 done
+
+# --- Prompt helpers ---
+#
+# Every question goes through these, so a run without a terminal (piped
+# installer, CI, --yes) can't hang or die partway. A bare `read` returns
+# non-zero at EOF and `set -e` turns that into an abort — which used to kill
+# this script at the first prompt on any non-interactive run, before it had
+# linked anything.
+
+can_prompt() { [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; }
+
+# confirm <prompt> [default:y|n] — true for yes
+confirm() {
+  local prompt="$1" default="${2:-n}" reply="" hint="[y/N]"
+  [ "$default" = "y" ] && hint="[Y/n]"
+  if [ "$ASSUME_YES" -eq 1 ]; then return 0; fi
+  if ! can_prompt; then [ "$default" = "y" ]; return; fi
+  read -r -p "$prompt $hint " reply || reply=""
+  [[ "${reply:-$default}" =~ ^[Yy]$ ]]
+}
+
+# ask <varname> <prompt> [default] — answer lands in <varname>
+ask() {
+  local __var="$1" __prompt="$2" __default="${3:-}" __reply=""
+  if can_prompt; then
+    if [ -n "$__default" ]; then
+      read -r -p "$__prompt [$__default]: " __reply || __reply=""
+    else
+      read -r -p "$__prompt: " __reply || __reply=""
+    fi
+  fi
+  printf -v "$__var" '%s' "${__reply:-$__default}"
+}
 
 if [ ! -d "$REPO_DIR/.git" ]; then
   echo "Error: expected repo at $REPO_DIR" >&2
@@ -72,22 +110,19 @@ fi
 # --- Optional installs (prompt only when not already present) ---
 
 if ! command -v claude &>/dev/null; then
-    read -r -p "Install Claude Code? [y/N] " _reply
-    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+    if confirm "Install Claude Code?"; then
         curl -fsSL https://claude.ai/install.sh | bash
     fi
 fi
 
 if command -v ollama &>/dev/null && ! ollama list 2>/dev/null | grep -q "dotfiles-commit"; then
-    read -r -p "Install dotfiles-commit Ollama model (used by auto-sync for commit messages)? [y/N] " _reply
-    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+    if confirm "Install dotfiles-commit Ollama model (used by auto-sync for commit messages)?"; then
         ollama create dotfiles-commit -f "$REPO_DIR/config/ollama/Modelfile"
     fi
 fi
 
 if [ ! -f "$HOME/Library/LaunchAgents/com.user.dotfiles-sync.plist" ]; then
-    read -r -p "Install auto-sync agent (watches ~/dotfiles, auto-commits+pushes changes)? [y/N] " _reply
-    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+    if confirm "Install auto-sync agent (watches ~/dotfiles, auto-commits+pushes changes)?"; then
         bash "$REPO_DIR/install.sh"
     fi
 fi
@@ -125,18 +160,71 @@ if [ "$DO_GIT" -eq 1 ]; then
     link_file "$REPO_DIR/.gitconfig" "$HOME/.gitconfig"
   fi
 
-  # Stub for per-machine git overrides. The tracked .gitconfig includes this
-  # last, so anything added here beats the defaults. Not tracked (gitignored).
+  # Pin the personal identity on this clone directly. Repo-local config beats
+  # anything global, so dotfiles commits stay personal even if ~/.gitconfig.local
+  # sets an identity machine-wide, and even if this clone lives somewhere the
+  # tracked includeIf pattern doesn't match. Values come from the tracked file
+  # so there's still one source of truth.
+  personal_cfg="$REPO_DIR/config/git/personal"
+  if [ -e "$personal_cfg" ]; then
+    git -C "$REPO_DIR" config user.name  "$(git config -f "$personal_cfg" --get user.name)"
+    git -C "$REPO_DIR" config user.email "$(git config -f "$personal_cfg" --get user.email)"
+  fi
+
+  # This machine's identity, for everything outside ~/dotfiles. The tracked
+  # .gitconfig sets useConfigOnly, so without this git refuses to commit rather
+  # than quietly inventing an address from username@hostname.
   if [ ! -e "$HOME/.gitconfig.local" ]; then
-    cat > "$HOME/.gitconfig.local" <<'LOCALCFG'
-# Per-machine git overrides. Included last by ~/.gitconfig, so settings here
-# win over the tracked defaults. Nothing in this file is tracked in dotfiles.
+    git_name=""; git_email=""; scope_dir=""
+    if can_prompt; then
+      echo ""
+      echo "Git identity for this machine. Used everywhere except ~/dotfiles,"
+      echo "which always commits as the personal identity tracked in this repo."
+      echo "Leave the email blank to skip and write a stub instead."
+      ask git_name  "  Name"  "$(git config --get user.name || true)"
+      ask git_email "  Email"
+      if [ -n "$git_email" ]; then
+        ask scope_dir "  Restrict it to one directory (blank = whole machine), e.g. ~/dev"
+      fi
+    fi
+
+    if [ -z "$git_email" ]; then
+      cat > "$HOME/.gitconfig.local" <<'LOCALCFG'
+# This machine's git identity. Included by ~/.gitconfig, and nothing here is
+# tracked in dotfiles. Until a [user] block exists here, git refuses to commit
+# outside ~/dotfiles rather than guessing an address (user.useConfigOnly).
 #
-# To use a different identity for repos under a given directory:
+#   [user]
+#       name = Your Name
+#       email = you@example.com
+#
+# To apply it only under one directory instead of machine-wide:
 #   [includeIf "gitdir:~/some/dir/"]
-#       path = ~/.gitconfig.other
+#       path = ~/.gitconfig.scoped
 LOCALCFG
-    echo "Created ~/.gitconfig.local stub"
+      echo "Wrote ~/.gitconfig.local stub — add a [user] block before committing outside ~/dotfiles"
+    elif [ -n "$scope_dir" ]; then
+      case "$scope_dir" in */) ;; *) scope_dir="$scope_dir/" ;; esac
+      cat > "$HOME/.gitconfig.scoped" <<SCOPEDCFG
+[user]
+	name = $git_name
+	email = $git_email
+SCOPEDCFG
+      cat > "$HOME/.gitconfig.local" <<LOCALCFG
+# This machine's git identity, scoped to one directory. Not tracked.
+[includeIf "gitdir:$scope_dir"]
+	path = ~/.gitconfig.scoped
+LOCALCFG
+      echo "Wrote ~/.gitconfig.local — $git_email applies under $scope_dir"
+    else
+      cat > "$HOME/.gitconfig.local" <<LOCALCFG
+# This machine's git identity. Not tracked.
+[user]
+	name = $git_name
+	email = $git_email
+LOCALCFG
+      echo "Wrote ~/.gitconfig.local — $git_email applies outside ~/dotfiles"
+    fi
   fi
 fi
 
@@ -197,20 +285,24 @@ if [ "$DO_SSH" -eq 1 ]; then
     existing=$(gh repo deploy-key list -R "$repo_slug" --json title --jq '.[].title' 2>/dev/null || true)
     if printf '%s\n' "$existing" | grep -qxF "$key_title"; then
       registered=1
-    elif gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
-      echo "Registered deploy key \"$key_title\" on $repo_slug"
-      registered=1
+    elif confirm "Register the deploy key using gh? (no = print it to add by hand, which keeps the key independent of your gh token)"; then
+      if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
+        echo "Registered deploy key \"$key_title\" on $repo_slug"
+        registered=1
+      else
+        echo "gh could not add the key (not authenticated, or missing scope)" >&2
+      fi
     fi
   fi
 
   if [ "$registered" -eq 0 ]; then
     echo "" >&2
-    echo "Could not register the deploy key automatically (gh missing, not" >&2
-    echo "authenticated, or lacking scope). Add this key manually, ticking" >&2
-    echo "\"Allow write access\":" >&2
+    echo "Add this deploy key to the repo, ticking \"Allow write access\":" >&2
     echo "  https://github.com/$repo_slug/settings/keys" >&2
     echo "" >&2
     cat "$ssh_key.pub" >&2
+    echo "" >&2
+    echo "Until it's added, auto-sync can commit but not push." >&2
     echo "" >&2
   fi
 
