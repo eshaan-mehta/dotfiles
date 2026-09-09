@@ -26,20 +26,12 @@ set -euo pipefail
 
 REPO_DIR="$HOME/dotfiles"
 
-usage() {
-  cat <<USAGE
-Usage:
-  ./bootstrap.sh
-USAGE
-}
-
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -h|--help)  usage; exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
-  esac
-  shift
-done
+# Takes no arguments. Rejected rather than ignored, so an old flag typed out of
+# habit fails loudly instead of looking like it did something.
+if [ $# -gt 0 ]; then
+  echo "Error: bootstrap.sh takes no arguments (got: $*)" >&2
+  exit 2
+fi
 
 # --- Prompt helpers ---
 #
