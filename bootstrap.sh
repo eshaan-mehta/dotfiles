@@ -12,7 +12,6 @@ set -euo pipefail
 #
 # COMMON USAGE:
 #   ./bootstrap.sh                 Standard setup, prompts for optional installs
-#   ./bootstrap.sh --no-git        Skip gitconfig link (keep machine's existing git identity)
 #   ./bootstrap.sh --no-ssh        Skip the deploy key / ssh config / remote setup
 #
 # Anything that varies between machines is asked as a question here rather than
@@ -31,26 +30,17 @@ REPO_DIR="$HOME/dotfiles"
 usage() {
   cat <<USAGE
 Usage:
-  ./bootstrap.sh [--no-nvim] [--no-shell] [--no-git] [--no-ssh]
+  ./bootstrap.sh [--no-ssh]
 
 Flags:
-  --no-nvim   Skip linking LazyVim config
-  --no-shell  Skip linking shell dotfiles (.zshrc/.zshenv/.bash*)
-  --no-git    Skip linking gitconfig
   --no-ssh    Skip deploy key generation, ssh config link, and remote setup
 USAGE
 }
 
-DO_NVIM=1
-DO_SHELL=1
-DO_GIT=1
 DO_SSH=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --no-nvim)  DO_NVIM=0 ;;
-    --no-shell) DO_SHELL=0 ;;
-    --no-git)   DO_GIT=0 ;;
     --no-ssh)   DO_SSH=0 ;;
     -h|--help)  usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
@@ -175,13 +165,11 @@ link_file() {
   ln -sfn "$src" "$dest"
 }
 
-if [ "$DO_SHELL" -eq 1 ]; then
-  for f in .zshrc .zshenv .bash_profile .bashrc; do
-    if [ -e "$REPO_DIR/$f" ]; then
-      link_file "$REPO_DIR/$f" "$HOME/$f"
-    fi
-  done
-fi
+for f in .zshrc .zshenv .bash_profile .bashrc; do
+  if [ -e "$REPO_DIR/$f" ]; then
+    link_file "$REPO_DIR/$f" "$HOME/$f"
+  fi
+done
 
 # --- oh-my-zsh ---
 #
@@ -201,50 +189,49 @@ else
         "" --unattended --keep-zshrc
 fi
 
-if [ "$DO_GIT" -eq 1 ]; then
-  if [ -e "$REPO_DIR/.gitconfig" ]; then
-    link_file "$REPO_DIR/.gitconfig" "$HOME/.gitconfig"
-  fi
+if [ -e "$REPO_DIR/.gitconfig" ]; then
+  link_file "$REPO_DIR/.gitconfig" "$HOME/.gitconfig"
+fi
 
-  # Pin the personal identity on this clone directly. Repo-local config beats
-  # anything global, so dotfiles commits stay personal even if ~/.gitconfig.local
-  # sets an identity machine-wide, and even if this clone lives somewhere the
-  # tracked includeIf pattern doesn't match. Values come from the tracked file
-  # so there's still one source of truth.
-  personal_cfg="$REPO_DIR/config/git/personal"
-  if [ -e "$personal_cfg" ]; then
-    git -C "$REPO_DIR" config user.name  "$(git config -f "$personal_cfg" --get user.name)"
-    git -C "$REPO_DIR" config user.email "$(git config -f "$personal_cfg" --get user.email)"
-  fi
+# Pin the personal identity on this clone directly. Repo-local config beats
+# anything global, so dotfiles commits stay personal even if ~/.gitconfig.local
+# sets an identity machine-wide, and even if this clone lives somewhere the
+# tracked includeIf pattern doesn't match. Values come from the tracked file
+# so there's still one source of truth.
+personal_cfg="$REPO_DIR/config/git/personal"
+if [ -e "$personal_cfg" ]; then
+  git -C "$REPO_DIR" config user.name  "$(git config -f "$personal_cfg" --get user.name)"
+  git -C "$REPO_DIR" config user.email "$(git config -f "$personal_cfg" --get user.email)"
+fi
 
-  # This machine's identity, for everything outside ~/dotfiles. The tracked
-  # .gitconfig sets useConfigOnly, so without this git refuses to commit rather
-  # than quietly inventing an address from username@hostname.
-  write_local_identity=1
-  if [ -e "$HOME/.gitconfig.local" ]; then
-    write_local_identity=0
-    _cur=$(git config -f "$HOME/.gitconfig.local" --get user.email 2>/dev/null || true)
-    if confirm "~/.gitconfig.local already exists (${_cur:-no identity set}). Overwrite it?"; then
-      write_local_identity=1
+# This machine's identity, for everything outside ~/dotfiles. The tracked
+# .gitconfig sets useConfigOnly, so without this git refuses to commit rather
+# than quietly inventing an address from username@hostname.
+write_local_identity=1
+if [ -e "$HOME/.gitconfig.local" ]; then
+  write_local_identity=0
+  _cur=$(git config -f "$HOME/.gitconfig.local" --get user.email 2>/dev/null || true)
+  if confirm "~/.gitconfig.local already exists (${_cur:-no identity set}). Overwrite it?"; then
+    write_local_identity=1
+  fi
+fi
+
+if [ "$write_local_identity" -eq 1 ]; then
+  git_name=""; git_email=""; scope_dir=""
+  if can_prompt; then
+    echo ""
+    echo "Git identity for this machine. Used everywhere except ~/dotfiles,"
+    echo "which always commits as the personal identity tracked in this repo."
+    echo "Leave the email blank to skip and write a stub instead."
+    ask git_name  "  Name"  "$(git config --get user.name || true)"
+    ask git_email "  Email"
+    if [ -n "$git_email" ]; then
+      ask scope_dir "  Restrict it to one directory (blank = whole machine), e.g. ~/dev"
     fi
   fi
 
-  if [ "$write_local_identity" -eq 1 ]; then
-    git_name=""; git_email=""; scope_dir=""
-    if can_prompt; then
-      echo ""
-      echo "Git identity for this machine. Used everywhere except ~/dotfiles,"
-      echo "which always commits as the personal identity tracked in this repo."
-      echo "Leave the email blank to skip and write a stub instead."
-      ask git_name  "  Name"  "$(git config --get user.name || true)"
-      ask git_email "  Email"
-      if [ -n "$git_email" ]; then
-        ask scope_dir "  Restrict it to one directory (blank = whole machine), e.g. ~/dev"
-      fi
-    fi
-
-    if [ -z "$git_email" ]; then
-      cat > "$HOME/.gitconfig.local" <<'LOCALCFG'
+  if [ -z "$git_email" ]; then
+    cat > "$HOME/.gitconfig.local" <<'LOCALCFG'
 # This machine's git identity. Included by ~/.gitconfig, and nothing here is
 # tracked in dotfiles. Until a [user] block exists here, git refuses to commit
 # outside ~/dotfiles rather than guessing an address (user.useConfigOnly).
@@ -257,40 +244,37 @@ if [ "$DO_GIT" -eq 1 ]; then
 #   [includeIf "gitdir:~/some/dir/"]
 #       path = ~/.gitconfig.scoped
 LOCALCFG
-      echo "Wrote ~/.gitconfig.local stub — add a [user] block before committing outside ~/dotfiles"
-    elif [ -n "$scope_dir" ]; then
-      case "$scope_dir" in */) ;; *) scope_dir="$scope_dir/" ;; esac
-      cat > "$HOME/.gitconfig.scoped" <<SCOPEDCFG
+    echo "Wrote ~/.gitconfig.local stub — add a [user] block before committing outside ~/dotfiles"
+  elif [ -n "$scope_dir" ]; then
+    case "$scope_dir" in */) ;; *) scope_dir="$scope_dir/" ;; esac
+    cat > "$HOME/.gitconfig.scoped" <<SCOPEDCFG
 [user]
 	name = $git_name
 	email = $git_email
 SCOPEDCFG
-      cat > "$HOME/.gitconfig.local" <<LOCALCFG
+    cat > "$HOME/.gitconfig.local" <<LOCALCFG
 # This machine's git identity, scoped to one directory. Not tracked.
 [includeIf "gitdir:$scope_dir"]
 	path = ~/.gitconfig.scoped
 LOCALCFG
-      echo "Wrote ~/.gitconfig.local — $git_email applies under $scope_dir"
-    else
-      cat > "$HOME/.gitconfig.local" <<LOCALCFG
+    echo "Wrote ~/.gitconfig.local — $git_email applies under $scope_dir"
+  else
+    cat > "$HOME/.gitconfig.local" <<LOCALCFG
 # This machine's git identity. Not tracked.
 [user]
 	name = $git_name
 	email = $git_email
 LOCALCFG
-      echo "Wrote ~/.gitconfig.local — $git_email applies outside ~/dotfiles"
-    fi
+    echo "Wrote ~/.gitconfig.local — $git_email applies outside ~/dotfiles"
   fi
 fi
 
-if [ "$DO_NVIM" -eq 1 ]; then
-  mkdir -p "$HOME/.config"
-  if [ -e "$REPO_DIR/config/nvim" ]; then
-    backup_if_needed "$HOME/.config/nvim"
-    ln -sfn "$REPO_DIR/config/nvim" "$HOME/.config/nvim"
-  else
-    echo "Note: $REPO_DIR/config/nvim not found; skipping nvim link" >&2
-  fi
+mkdir -p "$HOME/.config"
+if [ -e "$REPO_DIR/config/nvim" ]; then
+  backup_if_needed "$HOME/.config/nvim"
+  ln -sfn "$REPO_DIR/config/nvim" "$HOME/.config/nvim"
+else
+  echo "Note: $REPO_DIR/config/nvim not found; skipping nvim link" >&2
 fi
 
 mkdir -p "$HOME/.config/git"

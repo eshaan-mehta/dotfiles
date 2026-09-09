@@ -13,12 +13,6 @@ This will:
 - Symlink LazyVim config: `~/.config/nvim -> ~/dotfiles/config/nvim`
 - Install/load the dotfiles auto-sync LaunchAgent (runs `install.sh`)
 
-### Options
-- Skip auto-sync install: `./bootstrap.sh --no-sync`
-- Skip LazyVim link: `./bootstrap.sh --no-nvim`
-- Skip shell dotfiles: `./bootstrap.sh --no-shell`
-- Skip gitconfig: `./bootstrap.sh --no-git`
-
 ## Verify
 - `launchctl list | grep dotfiles-sync`
 - `tail -f ~/dotfiles/.auto-sync.log`
