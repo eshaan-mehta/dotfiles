@@ -103,29 +103,48 @@ fi
 cd "$REPO_DIR"
 
 if command -v brew &>/dev/null; then
-    brew bundle --file="$REPO_DIR/Brewfile"
+    if brew bundle check --file="$REPO_DIR/Brewfile" &>/dev/null; then
+        echo "Brewfile: all dependencies already installed"
+    else
+        echo "Brewfile: missing —"
+        brew bundle check --file="$REPO_DIR/Brewfile" --verbose 2>/dev/null \
+            | grep -Ev '^(==>|✔)' | sed 's/^/  /' || true
+        if confirm "Install them?" y; then
+            brew bundle --file="$REPO_DIR/Brewfile"
+        fi
+    fi
 else
     echo "Warning: homebrew not found, skipping Brewfile install" >&2
 fi
 
 # --- Optional installs (prompt only when not already present) ---
 
-if ! command -v claude &>/dev/null; then
-    if confirm "Install Claude Code?"; then
+if command -v claude &>/dev/null; then
+    _v=$(claude --version 2>/dev/null | head -1 || true)
+    if confirm "Claude Code is already installed${_v:+ ($_v)}. Reinstall over it?"; then
         curl -fsSL https://claude.ai/install.sh | bash
     fi
+elif confirm "Claude Code is not installed. Install it?" y; then
+    curl -fsSL https://claude.ai/install.sh | bash
 fi
 
-if command -v ollama &>/dev/null && ! ollama list 2>/dev/null | grep -q "dotfiles-commit"; then
-    if confirm "Install dotfiles-commit Ollama model (used by auto-sync for commit messages)?"; then
+if command -v ollama &>/dev/null; then
+    if ollama list 2>/dev/null | grep -q "dotfiles-commit"; then
+        if confirm "Ollama model 'dotfiles-commit' already exists. Rebuild it from config/ollama/Modelfile?"; then
+            ollama create dotfiles-commit -f "$REPO_DIR/config/ollama/Modelfile"
+        fi
+    elif confirm "Ollama model 'dotfiles-commit' is missing; auto-sync uses it to write commit messages. Create it?" y; then
         ollama create dotfiles-commit -f "$REPO_DIR/config/ollama/Modelfile"
     fi
 fi
 
-if [ ! -f "$HOME/Library/LaunchAgents/com.user.dotfiles-sync.plist" ]; then
-    if confirm "Install auto-sync agent (watches ~/dotfiles, auto-commits+pushes changes)?"; then
+sync_plist="$HOME/Library/LaunchAgents/com.user.dotfiles-sync.plist"
+if [ -f "$sync_plist" ]; then
+    if confirm "Auto-sync agent is already installed. Reinstall and reload it?"; then
         bash "$REPO_DIR/install.sh"
     fi
+elif confirm "Auto-sync agent is not installed; it watches ~/dotfiles and commits and pushes changes. Install it?" y; then
+    bash "$REPO_DIR/install.sh"
 fi
 
 # --- Symlinks ---
@@ -144,6 +163,17 @@ backup_if_needed() {
 link_file() {
   local src="$1"
   local dest="$2"
+  # Say what's changing. Already-correct links are silent so a re-run only
+  # reports real differences; a replaced regular file is kept in $backup_dir,
+  # and repointing a symlink discards nothing.
+  if [ -L "$dest" ]; then
+    local current
+    current=$(readlink "$dest")
+    [ "$current" = "$src" ] && return 0
+    echo "  relink $dest: $current -> $src"
+  elif [ -e "$dest" ]; then
+    echo "  replace $dest (regular file, moved to $backup_dir/)"
+  fi
   backup_if_needed "$dest"
   ln -sfn "$src" "$dest"
 }
@@ -175,7 +205,16 @@ if [ "$DO_GIT" -eq 1 ]; then
   # This machine's identity, for everything outside ~/dotfiles. The tracked
   # .gitconfig sets useConfigOnly, so without this git refuses to commit rather
   # than quietly inventing an address from username@hostname.
-  if [ ! -e "$HOME/.gitconfig.local" ]; then
+  write_local_identity=1
+  if [ -e "$HOME/.gitconfig.local" ]; then
+    write_local_identity=0
+    _cur=$(git config -f "$HOME/.gitconfig.local" --get user.email 2>/dev/null || true)
+    if confirm "~/.gitconfig.local already exists (${_cur:-no identity set}). Overwrite it?"; then
+      write_local_identity=1
+    fi
+  fi
+
+  if [ "$write_local_identity" -eq 1 ]; then
     git_name=""; git_email=""; scope_dir=""
     if can_prompt; then
       echo ""
@@ -270,7 +309,15 @@ if [ "$DO_SSH" -eq 1 ]; then
     link_file "$REPO_DIR/.ssh/config" "$HOME/.ssh/config"
   fi
 
-  if [ ! -f "$ssh_key" ]; then
+  if [ -f "$ssh_key" ]; then
+    _fp=$(ssh-keygen -lf "$ssh_key.pub" 2>/dev/null | awk '{print $2}' || true)
+    echo "Deploy key already exists: $ssh_key${_fp:+ ($_fp)}"
+    if confirm "Regenerate it? Pushes fail until the old key is removed from $repo_slug and the new one added"; then
+      rm -f "$ssh_key" "$ssh_key.pub"
+      echo "Generating deploy key: $ssh_key"
+      ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
+    fi
+  else
     echo "Generating deploy key: $ssh_key"
     ssh-keygen -t ed25519 -N "" -C "$key_title" -f "$ssh_key" >/dev/null
   fi
@@ -285,6 +332,7 @@ if [ "$DO_SSH" -eq 1 ]; then
   if command -v gh &>/dev/null; then
     existing=$(gh repo deploy-key list -R "$repo_slug" --json title --jq '.[].title' 2>/dev/null || true)
     if printf '%s\n' "$existing" | grep -qxF "$key_title"; then
+      echo "Deploy key \"$key_title\" is already registered on $repo_slug"
       registered=1
     elif confirm "Register the deploy key using gh? (no = print it to add by hand, which keeps the key independent of your gh token)"; then
       if gh repo deploy-key add "$ssh_key.pub" -R "$repo_slug" -w -t "$key_title" >/dev/null 2>&1; then
@@ -310,7 +358,13 @@ if [ "$DO_SSH" -eq 1 ]; then
   # Point this clone at the alias defined in .ssh/config so it uses the scoped
   # key. This lives in .git/config, which isn't tracked — hence doing it here,
   # so every machine gets it from bootstrap rather than by hand.
-  git remote set-url origin "git@github-dotfiles:$repo_slug.git"
+  desired_remote="git@github-dotfiles:$repo_slug.git"
+  current_remote=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)
+  if [ "$current_remote" = "$desired_remote" ]; then
+    echo "origin already points at the scoped alias"
+  elif confirm "Change origin from ${current_remote:-unset} to $desired_remote?" y; then
+    git remote set-url origin "$desired_remote"
+  fi
 fi
 
 echo "Done."
