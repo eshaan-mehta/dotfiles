@@ -66,3 +66,5 @@
 # public repo's history instead.
 [includeIf "gitdir:~/dotfiles/"]
 	path = ~/dotfiles/config/git/personal
+[url "git@github.com:"]
+	insteadOf = https://github.com/
