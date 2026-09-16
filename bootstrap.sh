@@ -6,7 +6,8 @@ set -euo pipefail
 # - Links LazyVim: ~/.config/nvim -> ~/dotfiles/config/nvim
 # - Sets up a repo-scoped SSH deploy key so auto-sync can push unattended
 # - Installs oh-my-zsh unprompted (.zshrc needs it, and it isn't a brew formula)
-# - Optionally installs Ghostty, cmux, Claude Code, the auto-sync agent, and its Ollama model
+# - Optionally installs Ghostty, cmux, VS Code, Scroll Reverser, Claude Code,
+#   the auto-sync agent, and its Ollama model
 #
 # Safe to rerun — symlinks are idempotent, optional installs only prompt when not yet installed.
 #
@@ -113,6 +114,8 @@ optional_cask() {
 
 optional_cask Ghostty.app ghostty "Ghostty (terminal emulator; this repo tracks its config)"
 optional_cask cmux.app    cmux    "cmux (Ghostty-based terminal with vertical tabs and agent notifications)"
+optional_cask "Visual Studio Code.app" visual-studio-code "Visual Studio Code"
+optional_cask "Scroll Reverser.app"    scroll-reverser    "Scroll Reverser (separate scroll directions for mouse and trackpad)"
 
 if command -v claude &>/dev/null; then
     _v=$(claude --version 2>/dev/null | head -1 || true)
