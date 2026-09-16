@@ -140,12 +140,12 @@ cdd() {
 
 _cdd_completions() {
     local DEV="$HOME/dev"
-    local DEV2="$HOME/dev2"
+    local SIDE="$HOME/side"
     local repos=()
     for dir in "$DEV"/*/; do
         repos+=("$(basename "$dir")")
     done
-    for dir in "$DEV2"/*/; do
+    for dir in "$SIDE"/*/; do
         repos+=("$(basename "$dir")")
     done
     compadd "$@" -- "${repos[@]}"
