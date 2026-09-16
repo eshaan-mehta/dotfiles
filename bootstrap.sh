@@ -6,7 +6,7 @@ set -euo pipefail
 # - Links LazyVim: ~/.config/nvim -> ~/dotfiles/config/nvim
 # - Sets up a repo-scoped SSH deploy key so auto-sync can push unattended
 # - Installs oh-my-zsh unprompted (.zshrc needs it, and it isn't a brew formula)
-# - Optionally installs Claude Code, the auto-sync agent, and its Ollama model
+# - Optionally installs Ghostty, cmux, Claude Code, the auto-sync agent, and its Ollama model
 #
 # Safe to rerun — symlinks are idempotent, optional installs only prompt when not yet installed.
 #
@@ -84,6 +84,35 @@ else
 fi
 
 # --- Optional installs (prompt only when not already present) ---
+
+# optional_cask <Name.app> <cask> <description> — offer a GUI app via Homebrew.
+#
+# Presence is judged by the .app bundle rather than `brew list --cask`: a .dmg
+# install is invisible to brew, and neither app puts a binary on PATH. Nothing
+# is offered when the app is already present — `brew upgrade` covers updates.
+optional_cask() {
+  local app="$1" cask="$2" desc="$3"
+  if [ -d "/Applications/$app" ] || [ -d "$HOME/Applications/$app" ]; then
+    echo "$cask: already installed"
+    return 0
+  fi
+  if ! command -v brew &>/dev/null; then
+    echo "Warning: homebrew not found, skipping $cask" >&2
+    return 0
+  fi
+  if confirm "$desc is not installed. Install it?" y; then
+    # `brew install` is a silent no-op when brew already lists the cask, which
+    # is the state after the bundle was dragged to the Trash — reinstall restores it.
+    if brew list --cask "$cask" &>/dev/null; then
+      brew reinstall --cask "$cask"
+    else
+      brew install --cask "$cask"
+    fi
+  fi
+}
+
+optional_cask Ghostty.app ghostty "Ghostty (terminal emulator; this repo tracks its config)"
+optional_cask cmux.app    cmux    "cmux (Ghostty-based terminal with vertical tabs and agent notifications)"
 
 if command -v claude &>/dev/null; then
     _v=$(claude --version 2>/dev/null | head -1 || true)
@@ -262,10 +291,15 @@ if [ -e "$REPO_DIR/config/git/ignore" ]; then
   link_file "$REPO_DIR/config/git/ignore" "$HOME/.config/git/ignore"
 fi
 
+# Ghostty reads both its macOS Application Support directory and
+# $XDG_CONFIG_HOME/ghostty/config. cmux renders with Ghostty's engine but reads
+# only the XDG path, so the same file is linked at both.
+ghostty_cfg="$REPO_DIR/config/ghostty/config.ghostty"
 ghostty_dir="$HOME/Library/Application Support/com.mitchellh.ghostty"
-if [ -e "$REPO_DIR/config/ghostty/config.ghostty" ]; then
-  mkdir -p "$ghostty_dir"
-  link_file "$REPO_DIR/config/ghostty/config.ghostty" "$ghostty_dir/config.ghostty"
+if [ -e "$ghostty_cfg" ]; then
+  mkdir -p "$ghostty_dir" "$HOME/.config/ghostty"
+  link_file "$ghostty_cfg" "$ghostty_dir/config.ghostty"
+  link_file "$ghostty_cfg" "$HOME/.config/ghostty/config"
 fi
 
 # --- SSH deploy key + remote ---

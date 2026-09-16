@@ -12,6 +12,7 @@ This will:
 - Symlink shell + git dotfiles into `~`
 - Symlink LazyVim config: `~/.config/nvim -> ~/dotfiles/config/nvim`
 - Install/load the dotfiles auto-sync LaunchAgent (runs `install.sh`)
+- Offer optional installs: Ghostty, cmux, Claude Code, and the Ollama commit-message model
 
 ## Verify
 - `launchctl list | grep dotfiles-sync`
