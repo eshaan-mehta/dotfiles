@@ -128,13 +128,13 @@ alias c="clear"
 
 cdd() {
     local DEV="$HOME/dev"
-    local DEV2="$HOME/dev2"
+    local SIDE="$HOME/side"
     if [ -d "$DEV/$1" ]; then
         cd "$DEV/$1"
-    elif [ -d "$DEV2/$1" ]; then
-        cd "$DEV2/$1"
+    elif [ -d "$SIDE/$1" ]; then
+        cd "$SIDE/$1"
     else
-        echo "Repo '$1' not found in $DEV or $DEV2"
+        echo "Repo '$1' not found in $DEV or $SIDE"
     fi
 }
 
