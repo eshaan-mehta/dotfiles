@@ -180,3 +180,5 @@ esac
 alias startvm='gcloud compute instances start eshaan-code-review --zone=us-central1-a --project=ecstatic-memory-478103-v0'
 alias sshvm='gcloud compute ssh eshaan-code-review --zone=us-central1-a --project=ecstatic-memory-478103-v0'
 alias stopvm='gcloud compute instances stop eshaan-code-review --zone=us-central1-a --project=ecstatic-memory-478103-v0'
+
+source "/Users/eshaan/claude-remote/shell/reattach.sh"  # claude-remote: reattach after ct-adopt
