@@ -182,3 +182,6 @@ alias sshvm='gcloud compute ssh eshaan-code-review --zone=us-central1-a --projec
 alias stopvm='gcloud compute instances stop eshaan-code-review --zone=us-central1-a --project=ecstatic-memory-478103-v0'
 
 source "/Users/eshaan/claude-remote/shell/reattach.sh"  # claude-remote: reattach after ct-adopt
+
+# opencode
+export PATH=/Users/eshaan/.opencode/bin:$PATH
